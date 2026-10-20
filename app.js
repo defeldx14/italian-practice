@@ -123,6 +123,7 @@
      app:'domshop-parola-v1',clientId:globalThis.PAROLE_CONFIG.webClientId,empty:C.empty,get:()=>doc,
      toItems:d=>Object.fromEntries(C.validate(d).events.map(e=>['event/'+e.id,e])),
      fromItems:items=>C.validate({format:C.FORMAT,version:1,events:Object.entries(items).filter(([key])=>key.startsWith('event/')).map(([,e])=>e)}),
+     loadState:async(profile,fallback)=>{const target=profile==='guest'?guestStore:guestStore.forAccount(profile);return target.get('data',fallback);},
      validate:C.validate,initialAt:(key,e)=>Date.parse(e.at)||0,
      set:async(d,profile)=>{S=profile==='guest'?guestStore:guestStore.forAccount(profile);await S.set('data',C.validate(d));doc=d;},
      customSync:async t=>{const target=S;await ItalianDrive.sync(target,new ItalianDrive.Drive(t),()=>{});if(target!==S)throw Error('Google account changed during sync.');doc=await target.read();},

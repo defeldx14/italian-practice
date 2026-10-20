@@ -32,6 +32,7 @@ function create(o){
   if(!initializing)capture();
   account=next;token='';expires=0;clearTimeout(timer);
   let state=read(snapshotKey(),account?o.empty():read(base+'.guest-original',o.empty()));
+  if(o.loadState)state=await o.loadState(profile(),state);
   state=await o.validate(state);
   const existing=read(journalKey(),null);doc=existing?C.valid(existing,o.app):seed(o.toItems(state));
   applying=true;try{await o.set(clone(state),profile());}finally{applying=false;}
