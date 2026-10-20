@@ -1,8 +1,10 @@
 /* No build step, no embedded credentials, no HTML interpolation of saved text. */
 (() => {
  'use strict';
- const C=ItalianCore,S=ItalianStore,$=id=>document.getElementById(id),ext=location.protocol==='chrome-extension:';
+ const C=ItalianCore,$=id=>document.getElementById(id),ext=location.protocol==='chrome-extension:';
  let doc=C.empty(),mode='word',session=[],cursor=0,editId=null,editEntry=null,editHeads=[],token='',expiry=0,gisReady=false,tokenClient=null,busy=false,sessionMode='word';
+ let S=ItalianStore,driveSync=null,drivePanel=null;
+ const guestStore=ItalianStore;
  const notify=t=>$('notice').textContent=t;
  function make(tag,text,parent,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;parent?.append(e);return e;}
  function action(text,parent,fn,cls='secondary'){const e=make('button',text,parent,cls);e.type='button';e.onclick=()=>Promise.resolve().then(fn).catch(e=>notify(e.message));return e;}
@@ -11,7 +13,7 @@
  document.querySelector('.brand').onclick=e=>{e.preventDefault();tab('today');};
  document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));end();refresh();});
  async function refresh(){
-  doc=await S.read();const records=C.project(doc),live=records.filter(r=>!r.deleted),available=live.filter(r=>C.eligible(r,mode));
+  const target=S,latest=await target.read();if(target!==S)return;doc=latest;const records=C.project(doc),live=records.filter(r=>!r.deleted),available=live.filter(r=>C.eligible(r,mode));
   $('wordCount').textContent=live.length;
   $('dueCount').textContent=available.filter(r=>{const p=C.progress(r,mode);return p.count&&p.due<=Date.now();}).length;
   $('newCount').textContent=available.filter(r=>!C.progress(r,mode).count).length;
@@ -23,7 +25,7 @@
  function start(newOnly){session=C.queue(doc,mode,Date.now(),newOnly);sessionMode=mode;cursor=0;if(!session.length){notify('No cards due in this mode. Try new words or another mode.');return;}$('startPanel').hidden=true;$('study').hidden=false;card();}
  function end(){$('study').hidden=true;$('startPanel').hidden=false;session=[];cursor=0;}
  function card(){
-  if(cursor>=session.length){notify('Session complete. Your reviews are saved on this device. Sync to send progress to your other device.');end();refresh();return;}
+  if(cursor>=session.length){notify('Session complete. Your reviews are saved. Google sync runs automatically when connected.');end();refresh();return;}
   const r=session[cursor],e=r.entry;$('cardPosition').textContent=`${cursor+1} / ${session.length} · ${sessionMode==='cloze'?'MISSING WORD':sessionMode==='sentence'?'SENTENCE RECALL':'WORD RECALL'}`;
   $('answerPanel').hidden=true;$('reveal').hidden=false;$('question').replaceChildren();$('context').textContent='';$('clozeInput').hidden=sessionMode!=='cloze';$('clozeInput').value='';
   if(sessionMode==='word'){$('cardInstruction').textContent='Recall the English meaning.';$('question').textContent=e.word;$('context').textContent=e.sentence;$('answer').textContent=e.translation;$('answerContext').textContent=e.sentenceTranslation;}
@@ -113,6 +115,29 @@
    $('clientLabel').hidden=ext;$('saveClient').hidden=ext;$('syncSetup').textContent=ext?'Chrome identity uses your extension OAuth client configured in manifest.json. Setup instructions are in SYNC-SETUP.md.':'Enter your public web OAuth client ID once. See SYNC-SETUP.md for Google Cloud setup. This does not enable billing.';
    if(ext){$('offlineInfo').textContent='This extension library is stored on your computer and works offline. Use the separate GitHub Pages app on your iPhone.';$('persist').hidden=true;}
    else if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js').then(()=>navigator.serviceWorker.ready).then(()=>$('offlineInfo').textContent='Offline app shell is ready on this browser. In Safari use Share → Add to Home Screen; open that installed app online once too.').catch(e=>$('offlineInfo').textContent='Offline setup failed: '+e.message);}
+   
+   if(!ext){
+    const oldPanel=$('clientLabel').closest('.panel');oldPanel.hidden=true;
+    drivePanel=document.createElement('div');oldPanel.before(drivePanel);
+    driveSync=DomshopDriveSync.create({
+     app:'domshop-parola-v1',clientId:globalThis.PAROLE_CONFIG.webClientId,empty:C.empty,get:()=>doc,
+     toItems:d=>Object.fromEntries(C.validate(d).events.map(e=>['event/'+e.id,e])),
+     fromItems:items=>C.validate({format:C.FORMAT,version:1,events:Object.entries(items).filter(([key])=>key.startsWith('event/')).map(([,e])=>e)}),
+     validate:C.validate,initialAt:(key,e)=>Date.parse(e.at)||0,
+     set:async(d,profile)=>{S=profile==='guest'?guestStore:guestStore.forAccount(profile);await S.set('data',C.validate(d));doc=d;},
+     customSync:async t=>{const target=S;await ItalianDrive.sync(target,new ItalianDrive.Drive(t),()=>{});if(target!==S)throw Error('Google account changed during sync.');doc=await target.read();},
+     onProfile:()=>{end();if($('editor').open)$('editor').close();},
+     refresh:()=>{refresh().catch(e=>notify(e.message));if(drivePanel&&driveSync)drivePanel.innerHTML=driveSync.panel();},
+     loadGoogle:loadGIS
+    });
+    await driveSync.ready;drivePanel.innerHTML=driveSync.panel();
+    $('accountConsent').checked=false;
+    window.addEventListener('domshop-parola-change',async e=>{
+     const target=S;if(e.detail?.database!==target.database)return;
+     try{const fresh=await target.read();if(target!==S)return;doc=fresh;driveSync.capture();}catch(err){notify('Local save needs attention: '+err.message);}
+    });
+   }
+
    tab(['today','library','settings'].includes(location.hash.slice(1))?location.hash.slice(1):'today');
    if(!ext&&$('clientId').value)loadGIS();
   }catch(e){notify('Local storage unavailable: '+e.message+'. Enable site storage and retry; existing data has not been cleared.');}

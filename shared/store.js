@@ -1,15 +1,16 @@
 (function(g){
  'use strict';
+ function makeStore(name='italian-hover-vocabulary'){
  let opening;
  function open(){return opening??=new Promise((resolve,reject)=>{
-  const r=indexedDB.open('italian-hover-vocabulary',1);
+  const r=indexedDB.open(name,1);
   r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
  });}
  async function get(key,fallback){const db=await open();return new Promise((resolve,reject)=>{const r=db.transaction('kv').objectStore('kv').get(key);r.onsuccess=()=>resolve(r.result??fallback);r.onerror=()=>reject(r.error);});}
  async function mutate(key,fn,fallback){const db=await open();return new Promise((resolve,reject)=>{
-  const tx=db.transaction('kv','readwrite'),s=tx.objectStore('kv'),r=s.get(key);let value;
-  r.onsuccess=()=>{try{value=fn(r.result??fallback);s.put(value,key);}catch(e){reject(e);tx.abort();}};
-  tx.oncomplete=()=>resolve(value);tx.onerror=()=>reject(tx.error||Error('Unable to save locally.'));tx.onabort=()=>reject(tx.error||Error('Local save cancelled.'));
+  const tx=db.transaction('kv','readwrite'),s=tx.objectStore('kv'),r=s.get(key);let value,changed=false;
+  r.onsuccess=()=>{try{const before=JSON.stringify(r.result??fallback);value=fn(r.result??fallback);changed=JSON.stringify(value)!==before;s.put(value,key);}catch(e){reject(e);tx.abort();}};
+  tx.oncomplete=()=>{resolve(value);if(key==='data'&&changed&&g.dispatchEvent&&typeof CustomEvent==='function')g.dispatchEvent(new CustomEvent('domshop-parola-change',{detail:{database:name}}));};tx.onerror=()=>reject(tx.error||Error('Unable to save locally.'));tx.onabort=()=>reject(tx.error||Error('Local save cancelled.'));
  });}
  const set=(key,value)=>mutate(key,()=>value);
  const read=()=>get('data',ItalianCore.empty());
@@ -45,5 +46,8 @@
    d.events.push(ItalianCore.event('translation','put',id,{value:{...r.entry,[field]:translation}},r.heads));return d;
   });
  }
- g.ItalianStore={open,get,set,mutate,read,change,device,capture,edit,translateSaved,fillTranslation,importDoc:d=>change(local=>ItalianCore.merge(local,d))};
+ return {database:name,open,get,set,mutate,read,change,device,capture,edit,translateSaved,fillTranslation,importDoc:d=>change(local=>ItalianCore.merge(local,d))};
+}
+ const stores=new Map();g.ItalianStore=makeStore();
+ g.ItalianStore.forAccount=id=>{if(!/^[A-Za-z0-9_-]{1,128}$/.test(id))throw Error('Invalid Google account ID.');if(!stores.has(id))stores.set(id,makeStore('italian-hover-vocabulary.google.'+id));return stores.get(id);};
 })(globalThis);

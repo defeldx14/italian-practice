@@ -1,5 +1,5 @@
-const CACHE='parole-shell-v5';
-const ASSETS=['./','./index.html','./style.css','./app.js','./config.js','./shared/core.js','./shared/store.js','./shared/drive.js','./manifest.webmanifest','./icons/192.png','./icons/512.png','./privacy.html'];
+const CACHE='parole-shell-v6';
+const ASSETS=['./','./index.html','./style.css','./app.js?v=6','./config.js','./shared/core.js','./shared/store.js?v=6','./shared/sync-core.js?v=6','./shared/google-account.js?v=6','./shared/drive-sync.js?v=6','./shared/drive.js','./manifest.webmanifest','./icons/192.png','./icons/512.png','./privacy.html'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('parole-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
