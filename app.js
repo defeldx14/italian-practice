@@ -117,7 +117,7 @@
    else if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js').then(()=>navigator.serviceWorker.ready).then(()=>$('offlineInfo').textContent='Offline app shell is ready on this browser. In Safari use Share → Add to Home Screen; open that installed app online once too.').catch(e=>$('offlineInfo').textContent='Offline setup failed: '+e.message);}
    
    if(!ext){
-    const oldPanel=$('clientLabel').closest('.panel');oldPanel.hidden=true;
+    const oldPanel=$('clientLabel').closest('.panel');oldPanel.hidden=true;$('connection').hidden=true;
     drivePanel=document.createElement('div');oldPanel.before(drivePanel);
     driveSync=DomshopDriveSync.create({
      app:'domshop-parola-v1',clientId:globalThis.PAROLE_CONFIG.webClientId,empty:C.empty,get:()=>doc,
