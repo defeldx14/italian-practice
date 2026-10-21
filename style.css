@@ -11,3 +11,5 @@ select{font:inherit;padding:10px;width:100%;margin:6px 0 14px;background:var(--s
 .stats{border-top:0}
 
 #today.view{padding-top:8px}#today>.stats{margin:0 0 16px;padding:12px 0}#today>.modes{margin-bottom:12px}#today>#startPanel{margin-top:12px}
+
+#settings.view{padding-top:8px}#settings.view>.panel:first-child{margin-top:0}#settings.view>.google-drive-panel:first-child{margin-top:0}
