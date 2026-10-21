@@ -2,7 +2,7 @@
 (() => {
  'use strict';
  const C=ItalianCore,$=id=>document.getElementById(id),ext=location.protocol==='chrome-extension:';
- let doc=C.empty(),mode='word',session=[],cursor=0,editId=null,editEntry=null,editHeads=[],token='',expiry=0,gisReady=false,tokenClient=null,busy=false,sessionMode='word',selectedWords=new Set(),quizAnswered=false;
+ let doc=C.empty(),mode='word',session=[],cursor=0,editId=null,editEntry=null,editHeads=[],token='',expiry=0,gisReady=false,tokenClient=null,busy=false,sessionMode='word',selectedWords=new Set(),quizAnswered=false,lastSessionIds=[];
  let S=ItalianStore,driveSync=null,drivePanel=null;
  const guestStore=ItalianStore;
  const notify=t=>$('notice').textContent=t;
@@ -12,7 +12,7 @@
  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
  document.querySelector('.brand').onclick=e=>{e.preventDefault();tab('today');};
  document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));end();refresh();});
- function queueOptions(all=false){return {all,limit:$('sessionSize').value==='all'?Infinity:Number($('sessionSize').value)||Infinity,ids:$('wordSet').value==='custom'?[...selectedWords]:null};}
+ function queueOptions(all=false){return {all,shuffle:true,limit:$('sessionSize').value==='all'?Infinity:Number($('sessionSize').value)||Infinity,ids:$('wordSet').value==='custom'?[...selectedWords]:null};}
  function practiceQueue(newOnly=false,all=false){return C.queue(doc,mode==='choice'?'cloze':mode,Date.now(),newOnly,queueOptions(all));}
  function picker(){const q=$('pickSearch').value.toLocaleLowerCase();$('pickList').replaceChildren();const rows=C.project(doc).filter(r=>!r.deleted&&!r.conflict&&[r.entry.word,r.entry.translation,r.entry.sentence].join(' ').toLocaleLowerCase().includes(q));for(const r of rows){const label=make('label',undefined,$('pickList'),'check'),check=make('input',undefined,label);check.type='checkbox';check.checked=selectedWords.has(r.id);check.onchange=()=>{if(check.checked)selectedWords.add(r.id);else selectedWords.delete(r.id);selectionChanged();};make('span',r.entry.word+' — '+r.entry.sentence,label);} $('pickCount').textContent=selectedWords.size+' selected';}
  function selectionChanged(){S.set('practiceSelection',[...selectedWords]);refresh();}
@@ -28,7 +28,7 @@
   $('readyText').textContent=!live.length?'Save your first word with Italian Hover, or import a backup.':!eligible?'No cards ready for this mode. Add missing translations or resolve conflicts in My words.':`${eligible} ${eligible===1?'entry':'entries'} available for this mode. Choose all words or a session size above.`;
   $('startAll').disabled=!practiceQueue(false,true).length;picker();renderLibrary();const last=await S.get('lastSync','');$('lastSync').textContent=last?'Last successful sync: '+new Date(last).toLocaleString():'';
  }
- function start(newOnly,all=false){session=practiceQueue(newOnly,all);sessionMode=mode;cursor=0;if(!session.length){notify('No cards due in this mode. Try new words or another mode.');return;}$('startPanel').hidden=true;$('today').classList.toggle('reviewing',true);$('study').hidden=false;card();}
+ function start(newOnly,all=false){session=practiceQueue(newOnly,all);if(session.length>1&&session.map(r=>r.id).join('|')===lastSessionIds.join('|')){const offset=1+Math.floor(Math.random()*(session.length-1));session.push(...session.splice(0,offset));}lastSessionIds=session.map(r=>r.id);sessionMode=mode;cursor=0;if(!session.length){notify('No cards due in this mode. Try new words or another mode.');return;}$('startPanel').hidden=true;$('today').classList.toggle('reviewing',true);$('study').hidden=false;card();}
  function end(){$('study').classList.toggle('rating-visible',false);$('today').classList.toggle('reviewing',false);$('study').hidden=true;$('startPanel').hidden=false;session=[];cursor=0;}
  function card(){
   if(cursor>=session.length){notify('Session complete. Your reviews are saved on this device. Sync to send progress to your other device.');end();refresh();return;}
