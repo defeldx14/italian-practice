@@ -65,6 +65,9 @@
   return {interval,due,count};
  }
  function eligible(r,mode){return !r.deleted&&!r.conflict&&(mode==='word'?!!r.entry.translation:mode==='sentence'?!!r.entry.sentenceTranslation:!!cloze(r.entry));}
- function queue(doc,mode,now=Date.now(),newOnly=false){return project(doc).filter(r=>eligible(r,mode)).map(r=>({...r,progress:progress(r,mode)})).filter(r=>newOnly?!r.progress.count:r.progress.due<=now).sort((a,b)=>(!!a.progress.count===!!b.progress.count?a.progress.due-b.progress.due:a.progress.count? -1:1)).slice(0,10);}
- g.ItalianCore={FORMAT,VERSION,DAY,cleanEntry,validate,empty,merge,project,key,recordId,event,cloze,progress,eligible,queue};
+ function queue(doc,mode,now=Date.now(),newOnly=false,options={}){const ids=options.ids?new Set(options.ids):null;const rows=project(doc).filter(r=>eligible(r,mode)&&(!ids||ids.has(r.id))).map(r=>({...r,progress:progress(r,mode)})).filter(r=>options.all|| (newOnly?!r.progress.count:r.progress.due<=now)).sort((a,b)=>(!!a.progress.count===!!b.progress.count?a.progress.due-b.progress.due:a.progress.count? -1:1));return rows.slice(0,options.limit===undefined?10:options.limit);}
+ function choices(record,records,random=Math.random){const key=s=>s.normalize('NFC').trim().toLocaleLowerCase('it');const seen=new Set([key(record.entry.word)]),others=[];for(const r of records){const k=key(r.entry.word);if(!r.deleted&&!r.conflict&&!seen.has(k)){seen.add(k);others.push(r.entry.word);}}const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};return shuffle([record.entry.word,...shuffle(others).slice(0,3)]);}
+
+ g.ItalianCore={FORMAT,VERSION,DAY,cleanEntry,validate,empty,merge,project,key,recordId,event,cloze,progress,eligible,queue,choices};
 })(globalThis);
+

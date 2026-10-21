@@ -1,5 +1,5 @@
-const CACHE='parole-shell-v8';
-const ASSETS=['./','./index.html','./style.css','./app.js?v=8','./config.js','./shared/core.js','./shared/store.js?v=6','./shared/sync-core.js?v=6','./shared/google-account.js?v=6','./shared/drive-sync.js?v=7','./shared/drive.js','./manifest.webmanifest','./icons/192.png','./icons/512.png','./privacy.html'];
+const CACHE='parole-shell-v9';
+const ASSETS=['./','./index.html','./style.css?v=9','./app.js?v=9','./config.js','./shared/core.js?v=9','./shared/store.js?v=6','./shared/sync-core.js?v=6','./shared/google-account.js?v=6','./shared/drive-sync.js?v=7','./shared/drive.js','./manifest.webmanifest','./icons/192.png','./icons/512.png','./privacy.html'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('parole-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
@@ -8,3 +8,4 @@ self.addEventListener('fetch',e=>{
  if(e.request.mode==='navigate')e.respondWith(fetch(e.request).catch(()=>caches.match('./index.html')));
  else e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request)));
 });
+
