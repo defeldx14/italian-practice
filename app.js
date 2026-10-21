@@ -2,7 +2,8 @@
 (() => {
  'use strict';
  const C=ItalianCore,$=id=>document.getElementById(id),ext=location.protocol==='chrome-extension:';
- let doc=C.empty(),mode='word',session=[],cursor=0,editId=null,editEntry=null,editHeads=[],token='',expiry=0,gisReady=false,tokenClient=null,busy=false,sessionMode='word',selectedWords=new Set(),quizAnswered=false,lastSessionIds=[];
+ let doc=C.empty(),mode='word',session=[],cursor=0,editId=null,editEntry=null,editHeads=[],token='',expiry=0,gisReady=false,tokenClient=null,busy=false,sessionMode='word',selectedWords=new Set(),quizAnswered=false,lastSessionIds=[],answerEpoch=0;
+ const sentenceCache=new Map(),sentenceRequests=new Map();
  let S=ItalianStore,driveSync=null,drivePanel=null;
  const guestStore=ItalianStore;
  const notify=t=>$('notice').textContent=t;
@@ -29,18 +30,19 @@
   $('startAll').disabled=!practiceQueue(false,true).length;picker();renderLibrary();const last=await S.get('lastSync','');$('lastSync').textContent=last?'Last successful sync: '+new Date(last).toLocaleString():'';
  }
  function start(newOnly,all=false){session=practiceQueue(newOnly,all);if(session.length>1&&session.map(r=>r.id).join('|')===lastSessionIds.join('|')){const offset=1+Math.floor(Math.random()*(session.length-1));session.push(...session.splice(0,offset));}lastSessionIds=session.map(r=>r.id);sessionMode=mode;cursor=0;if(!session.length){notify('No cards due in this mode. Try new words or another mode.');return;}$('startPanel').hidden=true;$('today').classList.toggle('reviewing',true);$('study').hidden=false;card();}
- function end(){$('study').classList.toggle('rating-visible',false);$('today').classList.toggle('reviewing',false);$('study').hidden=true;$('startPanel').hidden=false;session=[];cursor=0;}
+ function end(){answerEpoch++;$('study').classList.toggle('rating-visible',false);$('today').classList.toggle('reviewing',false);$('study').hidden=true;$('startPanel').hidden=false;session=[];cursor=0;}
  function card(){
   if(cursor>=session.length){notify('Session complete. Your reviews are saved on this device. Sync to send progress to your other device.');end();refresh();return;}
   $('study').scrollIntoView?.({block:'start',behavior:'instant'});
   const r=session[cursor],e=r.entry;$('cardPosition').textContent=`${cursor+1} / ${session.length} · ${sessionMode==='choice'?'SENTENCE QUIZ':sessionMode==='cloze'?'MISSING WORD':sessionMode==='sentence'?'SENTENCE RECALL':'WORD RECALL'}`;
   $('study').classList.toggle('rating-visible',false);
+  answerEpoch++;$('sentenceEnglish').hidden=true;$('sentenceEnglish').textContent='';$('retrySentence').hidden=true;
   quizAnswered=false;$('quizChoices').replaceChildren();$('quizFeedback').textContent='';$('quizNext').hidden=true;
   $('answerPanel').hidden=true;$('reveal').hidden=false;$('question').replaceChildren();$('context').textContent='';$('clozeInput').hidden=sessionMode!=='cloze';$('clozeInput').value='';
   if(sessionMode==='word'){$('cardInstruction').textContent='';$('question').textContent=e.word;$('context').textContent=e.sentence;$('answer').textContent=e.translation;$('answerContext').textContent=e.sentenceTranslation;}
   if(sessionMode==='sentence'){$('cardInstruction').textContent='Read the sentence. Can you explain it in English?';$('question').textContent=e.sentence;$('answer').textContent=e.sentenceTranslation;$('answerContext').textContent=e.word+(e.translation?' — '+e.translation:'');}
   if(sessionMode==='cloze'||sessionMode==='choice'){const c=C.cloze(e);if(!c){cursor++;card();return;}$('cardInstruction').textContent='Complete the original Italian sentence.';make('span',c.before,$('question'));make('span',' ______ ',$('question'));make('span',c.after,$('question'));$('context').textContent=e.sentenceTranslation||'Recall the missing word from your reading.';$('answer').textContent=e.word;$('answerContext').textContent=e.sentence;
-   if(sessionMode==='choice'){$('clozeInput').hidden=true;$('reveal').hidden=true;$('context').textContent='';$('cardInstruction').textContent='Choose the word or phrase saved from this sentence.';const options=C.choices(r,C.project(doc).filter(x=>$('wordSet').value!=='custom'||selectedWords.has(x.id)));if(options.length<2){$('quizFeedback').textContent='Add another distinct word for multiple choice. Reveal and self-rate this card.';$('reveal').hidden=false;}else for(const option of options)action(option.toLocaleLowerCase('it'),$('quizChoices'),()=>{if(quizAnswered)return;quizAnswered=true;const correct=option===e.word;$('quizFeedback').textContent=correct?'Correct — '+e.word+(e.translation?': '+e.translation:''):'Saved answer: '+e.word+(e.translation?' — '+e.translation:'');$('quizFeedback').dataset.result=correct?'correct':'incorrect';$('answerPanel').hidden=false;document.querySelectorAll('[data-rating]').forEach(b=>b.hidden=true);$('quizNext').hidden=false;for(const b of $('quizChoices').children){b.disabled=true;if(b.textContent===e.word.toLocaleLowerCase('it'))b.className='quiz-correct';else if(b.textContent===option.toLocaleLowerCase('it'))b.className='quiz-incorrect';}});}
+   if(sessionMode==='choice'){$('clozeInput').hidden=true;$('reveal').hidden=true;$('context').textContent='';$('cardInstruction').textContent='Choose the word or phrase saved from this sentence.';const options=C.choices(r,C.project(doc).filter(x=>$('wordSet').value!=='custom'||selectedWords.has(x.id)));if(options.length<2){$('quizFeedback').textContent='Add another distinct word for multiple choice. Reveal and self-rate this card.';$('reveal').hidden=false;}else for(const option of options)action(option.toLocaleLowerCase('it'),$('quizChoices'),()=>{if(quizAnswered)return;quizAnswered=true;const correct=option===e.word;$('quizFeedback').textContent=correct?'Correct — '+e.word+(e.translation?': '+e.translation:''):'Saved answer: '+e.word+(e.translation?' — '+e.translation:'');$('quizFeedback').dataset.result=correct?'correct':'incorrect';$('answerPanel').hidden=false;document.querySelectorAll('[data-rating]').forEach(b=>b.hidden=true);$('quizNext').hidden=false;showAnswerSentence(r);for(const b of $('quizChoices').children){b.disabled=true;if(b.textContent===e.word.toLocaleLowerCase('it'))b.className='quiz-correct';else if(b.textContent===option.toLocaleLowerCase('it'))b.className='quiz-incorrect';}});}
   }
   if(sessionMode!=='choice'||!quizAnswered)document.querySelectorAll('[data-rating]').forEach(b=>b.hidden=false);
  }
@@ -48,13 +50,65 @@
  $('quizNext').onclick=async()=>{if(!quizAnswered||$('quizNext').disabled)return;$('quizNext').disabled=true;const r=session[cursor],rating=$('quizFeedback').dataset.result==='correct'?'good':'again',device=await S.device();$('quizNext').disabled=true;try{await S.change(d=>{const live=C.project(d).find(x=>x.id===r.id);if(!live||live.deleted||live.conflict)throw Error('This entry changed. End the session and check My words.');d.events.push(C.event(device,'review',r.id,{mode:'cloze',rating}));return d;});cursor++;card();await refresh();}catch(e){notify(e.message);}finally{$('quizNext').disabled=false;}};
  document.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.repeat&&!['INPUT','TEXTAREA','SELECT','BUTTON'].includes(e.target?.tagName)&&!e.target?.isContentEditable&&!$('study').hidden&&!$('quizNext').hidden){e.preventDefault();if(!$('quizNext').disabled)$('quizNext').onclick();}});
  $('startReview').onclick=()=>start(false);$('startNew').onclick=()=>start(true);$('endSession').onclick=end;
- $('reveal').onclick=()=>{$('answerPanel').hidden=false;$('reveal').hidden=true;$('study').classList.toggle('rating-visible',true);};
+ $('reveal').onclick=()=>{$('answerPanel').hidden=false;$('reveal').hidden=true;$('study').classList.toggle('rating-visible',true);if(sessionMode==='choice')showAnswerSentence(session[cursor]);};
  document.querySelectorAll('[data-rating]').forEach(b=>b.onclick=async()=>{
   if($('answerPanel').hidden||!session[cursor])return;
   const r=session[cursor],device=await S.device();document.querySelectorAll('[data-rating]').forEach(x=>x.disabled=true);
   try{await S.change(d=>{const current=C.project(d).find(x=>x.id===r.id);if(!current||current.deleted)throw Error('This card was deleted. Refresh your library.');if(current.conflict)throw Error('This word has conflicting edits. End the session and resolve it in My words.');d.events.push(C.event(device,'review',r.id,{mode:sessionMode==='choice'?'cloze':sessionMode,rating:b.dataset.rating}));return d;});cursor++;card();await refresh();}
   catch(e){notify(e.message);}finally{document.querySelectorAll('[data-rating]').forEach(x=>x.disabled=false);}
  });
+ async function sentenceTranslation(record,target=S){
+  const original=record.entry.sentence;
+  const latest=C.project(await target.read()).find(r=>r.id===record.id);
+  if(!latest||latest.deleted||latest.conflict||latest.entry.sentence!==original)throw Error('Entry changed. Check My words.');
+  if(latest.entry.sentenceTranslation)return latest.entry.sentenceTranslation;
+  if(!navigator.onLine)throw Error('Offline. Retry when connected.');
+  const key=(target.database||'local')+'\n'+record.id+'\n'+original;
+  let pending=sentenceRequests.get(key);
+  if(!pending){
+   pending=(async()=>{
+    let translation=sentenceCache.get(original);
+    if(!translation){
+     if(ext){
+      const response=await chrome.runtime.sendMessage({type:'translate',id:crypto.randomUUID(),kind:'sentence',word:record.entry.word,sentence:original});
+      if(response?.error)throw Error(response.error);translation=response?.data?.translation;
+     }else{
+      const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
+      try{
+       const url=new URL('https://translate.googleapis.com/translate_a/single');
+       url.search=new URLSearchParams({client:'gtx',sl:'it',tl:'en',dt:'t',q:original}).toString();
+       const response=await fetch(url.href,{signal:controller.signal,credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer'});
+       if(!response.ok)throw Error(response.status===429?'Google is rate-limiting translations. Retry later.':'Google translation unavailable. Retry later.');
+       const data=await response.json();if(!Array.isArray(data?.[0]))throw Error('Translation unavailable.');
+       translation=data[0].filter(row=>Array.isArray(row)&&typeof row[0]==='string').map(row=>row[0]).join('').trim();
+      }finally{clearTimeout(timeout);}
+     }
+     if(typeof translation!=='string'||!translation.trim()||translation.length>6000)throw Error('Translation unavailable.');
+     sentenceCache.set(original,translation);if(sentenceCache.size>250)sentenceCache.delete(sentenceCache.keys().next().value);
+    }
+    if(target!==S)throw Error('Google account changed. Retry in the intended account.');
+    // Fill only an empty field, retaining concurrent manual edits and deletions.
+    await target.fillTranslation(record.id,record.entry.word,original,'sentenceTranslation',translation);
+    const saved=C.project(await target.read()).find(r=>r.id===record.id);
+    if(!saved||saved.deleted||saved.conflict||saved.entry.sentence!==original||!saved.entry.sentenceTranslation)throw Error('Entry changed. Check My words.');
+    return saved.entry.sentenceTranslation;
+   })();sentenceRequests.set(key,pending);
+   pending.finally(()=>sentenceRequests.delete(key)).catch(()=>{});
+  }
+  return pending;
+ }
+ async function showAnswerSentence(record){
+  const epoch=answerEpoch,target=S;
+  const current=()=>epoch===answerEpoch&&target===S&&!$('study').hidden&&!$('answerPanel').hidden;
+  $('sentenceEnglish').hidden=false;$('sentenceEnglish').textContent=record.entry.sentenceTranslation||'Translating sentence…';$('retrySentence').hidden=true;
+  if(record.entry.sentenceTranslation)return;
+  try{
+   const translation=await sentenceTranslation(record,target);
+   if(current()){$('sentenceEnglish').textContent=translation;record.entry.sentenceTranslation=translation;}
+   if(target===S)await refresh();
+  }catch(e){if(current()){$('sentenceEnglish').textContent='Sentence translation not saved. '+(e.name==='AbortError'?'Request timed out.':e.message);$('retrySentence').hidden=false;}}
+ }
+ $('retrySentence').onclick=()=>{const record=session[cursor];if(record)showAnswerSentence(record);};
  function renderLibrary(){
   const q=$('search').value.toLocaleLowerCase(),all=C.project(doc),rows=all.filter(r=>(!r.deleted||$('showDeleted').checked)&&[r.entry.word,r.entry.translation,r.entry.sentence,r.entry.sentenceTranslation].join(' ').toLocaleLowerCase().includes(q));
   $('entries').replaceChildren();$('librarySummary').textContent=`${rows.length} matching entries${all.some(r=>r.conflict)?' · Conflicts need your choice before practice.':''}`;
@@ -71,8 +125,8 @@
    const actions=make('div',undefined,article,'actions');action(r.conflict?'Resolve':'Edit',actions,()=>openEditor(r));
    if(!r.deleted){action('Delete',actions,async()=>{if(confirm('Delete this entry from practice on all synced devices?')){await S.edit(r.id,null,'delete',r.heads);await refresh();}});}
    else action('Restore',actions,()=>openEditor(r));
-   if(ext&&!e.sentenceTranslation&&!r.deleted&&!r.conflict)action('Translate sentence',actions,async()=>{
-    notify('Requesting sentence translation from Google...');const response=await chrome.runtime.sendMessage({type:'translate',id:crypto.randomUUID(),kind:'sentence',word:e.word,sentence:e.sentence});if(response?.error)throw Error(response.error);if(!response?.data?.translation)throw Error('Translation unavailable.');await S.translateSaved(r.id,e.sentence,response.data.translation);notify('Sentence translation saved.');await refresh();
+   if(!e.sentenceTranslation&&!r.deleted&&!r.conflict)action('Translate sentence',actions,async()=>{
+    notify('Translating and saving sentence…');await sentenceTranslation(r);notify('Sentence translation saved.');await refresh();
    });
   }
  }
