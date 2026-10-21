@@ -28,10 +28,11 @@
   $('readyText').textContent=!live.length?'Save your first word with Italian Hover, or import a backup.':!eligible?'No cards ready for this mode. Add missing translations or resolve conflicts in My words.':`${eligible} ${eligible===1?'entry':'entries'} available for this mode. Choose all words or a session size above.`;
   $('startAll').disabled=!practiceQueue(false,true).length;picker();renderLibrary();const last=await S.get('lastSync','');$('lastSync').textContent=last?'Last successful sync: '+new Date(last).toLocaleString():'';
  }
- function start(newOnly,all=false){session=practiceQueue(newOnly,all);sessionMode=mode;cursor=0;if(!session.length){notify('No cards due in this mode. Try new words or another mode.');return;}$('startPanel').hidden=true;$('study').hidden=false;card();}
- function end(){$('study').hidden=true;$('startPanel').hidden=false;session=[];cursor=0;}
+ function start(newOnly,all=false){session=practiceQueue(newOnly,all);sessionMode=mode;cursor=0;if(!session.length){notify('No cards due in this mode. Try new words or another mode.');return;}$('startPanel').hidden=true;$('today').classList.toggle('reviewing',true);$('study').hidden=false;card();}
+ function end(){$('today').classList.toggle('reviewing',false);$('study').hidden=true;$('startPanel').hidden=false;session=[];cursor=0;}
  function card(){
   if(cursor>=session.length){notify('Session complete. Your reviews are saved on this device. Sync to send progress to your other device.');end();refresh();return;}
+  $('study').scrollIntoView?.({block:'start',behavior:'instant'});
   const r=session[cursor],e=r.entry;$('cardPosition').textContent=`${cursor+1} / ${session.length} · ${sessionMode==='choice'?'SENTENCE QUIZ':sessionMode==='cloze'?'MISSING WORD':sessionMode==='sentence'?'SENTENCE RECALL':'WORD RECALL'}`;
   quizAnswered=false;$('quizChoices').replaceChildren();$('quizFeedback').textContent='';$('quizNext').hidden=true;
   $('answerPanel').hidden=true;$('reveal').hidden=false;$('question').replaceChildren();$('context').textContent='';$('clozeInput').hidden=sessionMode!=='cloze';$('clozeInput').value='';
