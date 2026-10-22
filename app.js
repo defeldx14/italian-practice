@@ -139,6 +139,32 @@
   if(r?.conflict)for(const v of r.variants){if(v.kind==='put')action(v.value.word+' — '+v.value.translation+'\n'+v.value.sentenceTranslation,$('variants'),()=>fill(v.value));else make('p','One device deleted this entry. Close and leave deleted, or Save entry to restore.',$('variants'),'warning');}
   fill(editEntry);$('editor').showModal();
  }
+ let bulkRows=null,bulkText='',bulkStore=null,bulkBusy=false,bulkEpoch=0;
+ function resetBulk(){bulkEpoch++;bulkRows=null;bulkStore=null;$('bulkImport').disabled=true;$('bulkResults').replaceChildren();$('bulkStatus').textContent='';}
+ $('bulkOpen').onclick=()=>{$('bulkPanel').hidden=!$('bulkPanel').hidden;if(!$('bulkPanel').hidden)$('bulkText').focus?.();};
+ $('bulkText').oninput=resetBulk;
+ $('bulkPreview').onclick=async()=>{
+  if(bulkBusy)return;resetBulk();const epoch=bulkEpoch,target=S,text=$('bulkText').value;
+  $('bulkPreview').disabled=true;
+  try{
+   const rows=await ItalianBulk.preview(text,await target.read());if(epoch!==bulkEpoch||target!==S||text!==$('bulkText').value)return;
+   bulkRows=rows;bulkText=text;bulkStore=target;
+   const ready=rows.filter(r=>r.status==='ready').length,duplicates=rows.filter(r=>r.status==='duplicate').length,invalid=rows.filter(r=>r.status==='invalid').length;
+   $('bulkStatus').textContent=ready+' ready · '+duplicates+' duplicates skipped · '+invalid+' invalid lines';
+   for(const row of rows){const line=make('div',undefined,$('bulkResults'),'bulk-row');make('strong','Line '+row.line+': '+(row.value?.word||'Invalid entry'),line);make('span',row.status==='ready'?'Ready':row.status==='duplicate'?'Skipped':'Fix this line',line);if(row.value){make('p',row.value.translation,line);make('p',row.value.sentence,line);if(row.value.sentenceTranslation)make('p',row.value.sentenceTranslation,line);}if(row.message)make('p',row.message,line,'muted');}
+   $('bulkImport').textContent='Import '+ready+' valid '+(ready===1?'entry':'entries');$('bulkImport').disabled=!ready;
+  }catch(e){$('bulkStatus').textContent=e.message;}finally{$('bulkPreview').disabled=false;}
+ };
+ $('bulkImport').onclick=async()=>{
+  if(bulkBusy||!bulkRows||bulkText!==$('bulkText').value||bulkStore!==S){if(!bulkBusy)$('bulkStatus').textContent='Preview your list again before importing.';return;}
+  bulkBusy=true;$('bulkImport').disabled=true;$('bulkPreview').disabled=true;$('bulkText').disabled=true;const target=bulkStore,rows=bulkRows;
+  try{
+   const result=await ItalianBulk.commit(target,rows,()=>target===S);
+   if(target===S){bulkRows=null;$('bulkStatus').textContent=result.added+' added · '+result.skipped+' duplicates skipped · '+result.invalid+' invalid lines not imported. Your words are saved locally.';notify(result.added+' words imported.');await refresh();}
+  }catch(e){$('bulkStatus').textContent='Nothing imported: '+e.message+' Preview again to retry.';bulkRows=null;}
+  finally{bulkBusy=false;$('bulkPreview').disabled=false;$('bulkText').disabled=false;}
+ };
+
  $('addManual').onclick=()=>openEditor(null);$('closeEditor').onclick=()=>$('editor').close();
  $('editForm').onsubmit=async ev=>{ev.preventDefault();try{
   const value=C.cleanEntry({...editEntry,word:$('editWord').value,translation:$('editTranslation').value,sentence:$('editSentence').value,sentenceTranslation:$('editSentenceTranslation').value,occurrence:Number($('editOccurrence').value)});
@@ -196,7 +222,7 @@
      validate:C.validate,initialAt:(key,e)=>Date.parse(e.at)||0,
      set:async(d,profile)=>{S=profile==='guest'?guestStore:guestStore.forAccount(profile);await S.set('data',C.validate(d));doc=d;},
      customSync:async t=>{const target=S;await ItalianDrive.sync(target,new ItalianDrive.Drive(t),()=>{});if(target!==S)throw Error('Google account changed during sync.');doc=await target.read();},
-     onProfile:()=>{selectedWords=new Set();$('wordSet').value='all';$('wordPicker').hidden=true;end();if($('editor').open)$('editor').close();},
+     onProfile:()=>{resetBulk();$('bulkPanel').hidden=true;selectedWords=new Set();$('wordSet').value='all';$('wordPicker').hidden=true;end();if($('editor').open)$('editor').close();},
      refresh:()=>{refresh().catch(e=>notify(e.message));if(drivePanel&&driveSync)drivePanel.innerHTML=driveSync.panel();},
      loadGoogle:loadGIS
     });
@@ -215,4 +241,5 @@
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh().catch(e=>notify(e.message));});
  window.addEventListener('online',()=>{if(!ext&&$('clientId').value)loadGIS();});boot();
 })();
+
 
