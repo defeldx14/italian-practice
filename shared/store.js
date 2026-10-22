@@ -1,5 +1,7 @@
 (function(g){
  'use strict';
+ const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('domshop-parola-storage'):null;
+ channel?.addEventListener('message',e=>{if(typeof e.data?.database==='string')g.dispatchEvent(new CustomEvent('domshop-parola-change',{detail:{database:e.data.database}}));});
  function makeStore(name='italian-hover-vocabulary'){
  let opening;
  function open(){return opening??=new Promise((resolve,reject)=>{
@@ -10,7 +12,7 @@
  async function mutate(key,fn,fallback){const db=await open();return new Promise((resolve,reject)=>{
   const tx=db.transaction('kv','readwrite'),s=tx.objectStore('kv'),r=s.get(key);let value,changed=false;
   r.onsuccess=()=>{try{const before=JSON.stringify(r.result??fallback);value=fn(r.result??fallback);changed=JSON.stringify(value)!==before;s.put(value,key);}catch(e){reject(e);tx.abort();}};
-  tx.oncomplete=()=>{resolve(value);if(key==='data'&&changed&&g.dispatchEvent&&typeof CustomEvent==='function')g.dispatchEvent(new CustomEvent('domshop-parola-change',{detail:{database:name}}));};tx.onerror=()=>reject(tx.error||Error('Unable to save locally.'));tx.onabort=()=>reject(tx.error||Error('Local save cancelled.'));
+  tx.oncomplete=()=>{resolve(value);if(key==='data'&&changed&&g.dispatchEvent&&typeof CustomEvent==='function'){g.dispatchEvent(new CustomEvent('domshop-parola-change',{detail:{database:name}}));channel?.postMessage({database:name});}};tx.onerror=()=>reject(tx.error||Error('Unable to save locally.'));tx.onabort=()=>reject(tx.error||Error('Local save cancelled.'));
  });}
  const set=(key,value)=>mutate(key,()=>value);
  const read=()=>get('data',ItalianCore.empty());

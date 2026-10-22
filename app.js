@@ -230,7 +230,7 @@
     $('accountConsent').checked=false;
     window.addEventListener('domshop-parola-change',async e=>{
      const target=S;if(e.detail?.database!==target.database)return;
-     try{const fresh=await target.read();if(target!==S)return;doc=fresh;driveSync.capture();}catch(err){notify('Local save needs attention: '+err.message);}
+     try{const fresh=await target.read();if(target!==S)return;doc=fresh;driveSync.capture();await refresh();}catch(err){notify('Local save needs attention: '+err.message);}
     });
    }
 
