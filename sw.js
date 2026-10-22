@@ -8,3 +8,5 @@ self.addEventListener('fetch',e=>{
  if(e.request.mode==='navigate')e.respondWith(fetch(e.request).catch(()=>caches.match('./index.html')));
  else e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request)));
 });
+
+
