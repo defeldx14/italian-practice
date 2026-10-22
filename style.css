@@ -16,3 +16,5 @@ select{font:inherit;padding:10px;width:100%;margin:6px 0 14px;background:var(--s
 
 #bulkResults{max-height:360px;overflow:auto}.bulk-row{padding:12px 0;border-top:1px solid var(--border);overflow-wrap:anywhere}.bulk-row>span{display:block;font-size:12px;color:var(--muted)}.bulk-row p{margin:4px 0;font-size:13px}#bulkText{font-size:15px}
 
+
+#library.view{padding-top:8px}
