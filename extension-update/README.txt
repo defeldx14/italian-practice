@@ -1,3 +1,11 @@
+PAROLA: GRAMMAR AND INFINITIVE LIBRARY UPDATE
+
+This overlay adds the Grammar tab, the ten-form reference, an interactive form
+quiz, and links saved verb entries to a shared infinitive (for example, messo →
+mettere). Existing saved entries are retained. Link forms in the Grammar tab; the
+infinitive is not guessed automatically. The extension uses its existing local
+or Google-synced vocabulary store and adds no permissions.
+
 PAROLA: BULK PASTE UPDATE
 
 Website: My words > Bulk paste > paste your list > Preview list > Import valid entries.
