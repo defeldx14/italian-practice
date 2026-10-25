@@ -7,7 +7,7 @@
   if(!v||typeof v!=='object')throw Error('Missing vocabulary entry.');
   const word=str(v.word,100,true),sentence=str(v.sentence,700,true);
   const occurrence=Number.isInteger(v.occurrence)?v.occurrence:-1;
-  return {word,translation:str(v.translation??'',6000),sentence,sentenceTranslation:str(v.sentenceTranslation??'',6000),sourceUrl:str(v.sourceUrl??'',3000),sourceTitle:str(v.sourceTitle??'',500),dateAdded:str(v.dateAdded??new Date().toISOString(),40),occurrence,truncated:!!v.truncated};
+  return {word,translation:str(v.translation??'',6000),sentence,sentenceTranslation:str(v.sentenceTranslation??'',6000),sourceUrl:str(v.sourceUrl??'',3000),sourceTitle:str(v.sourceTitle??'',500),dateAdded:str(v.dateAdded??new Date().toISOString(),40),occurrence,truncated:!!v.truncated,lemma:str(v.lemma??'',100),grammarForm:str(v.grammarForm??'',40)};
  }
  function validate(input){
   if(!input||input.format!==FORMAT||input.version!==VERSION||!Array.isArray(input.events)||input.events.length>25000)throw Error('Not a supported Italian Hover v1 backup (maximum 25,000 changes).');
