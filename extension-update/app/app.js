@@ -9,7 +9,7 @@
  const notify=t=>$('notice').textContent=t;
  function make(tag,text,parent,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;parent?.append(e);return e;}
  function action(text,parent,fn,cls='secondary'){const e=make('button',text,parent,cls);e.type='button';e.onclick=()=>Promise.resolve().then(fn).catch(e=>notify(e.message));return e;}
- function tab(name){document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));location.hash=name;}
+ function tab(name){if(name==='grammar')renderGrammar();document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!==name);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));location.hash=name;}
  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
  document.querySelector('.brand').onclick=e=>{e.preventDefault();tab('today');};
  document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));end();refresh();});
@@ -27,7 +27,7 @@
   const today=new Date().toDateString();$('reviewCount').textContent=doc.events.filter(e=>e.kind==='review'&&new Date(e.at).toDateString()===today).length;
   const eligible=available.length;$('startReview').disabled=!practiceQueue().length;$('startNew').disabled=!practiceQueue(true).length;
   $('readyText').textContent=!live.length?'Save your first word with Italian Hover, or import a backup.':!eligible?'No cards ready for this mode. Add missing translations or resolve conflicts in My words.':`${eligible} ${eligible===1?'entry':'entries'} available for this mode. Choose all words or a session size above.`;
-  $('startAll').disabled=!practiceQueue(false,true).length;picker();renderLibrary();const last=await S.get('lastSync','');$('lastSync').textContent=last?'Last successful sync: '+new Date(last).toLocaleString():'';
+  $('startAll').disabled=!practiceQueue(false,true).length;picker();renderLibrary();if(location.hash==='#grammar')renderGrammar();const last=await S.get('lastSync','');$('lastSync').textContent=last?'Last successful sync: '+new Date(last).toLocaleString():'';
  }
  function start(newOnly,all=false){session=practiceQueue(newOnly,all);if(session.length>1&&session.map(r=>r.id).join('|')===lastSessionIds.join('|')){const offset=1+Math.floor(Math.random()*(session.length-1));session.push(...session.splice(0,offset));}lastSessionIds=session.map(r=>r.id);sessionMode=mode;cursor=0;if(!session.length){notify('No cards due in this mode. Try new words or another mode.');return;}$('startPanel').hidden=true;$('today').classList.toggle('reviewing',true);$('study').hidden=false;card();}
  function end(){answerEpoch++;$('study').classList.toggle('rating-visible',false);$('today').classList.toggle('reviewing',false);$('study').hidden=true;$('startPanel').hidden=false;session=[];cursor=0;}
@@ -109,6 +109,50 @@
   }catch(e){if(current()){$('sentenceEnglish').textContent='Sentence translation not saved. '+(e.name==='AbortError'?'Request timed out.':e.message);$('retrySentence').hidden=false;}}
  }
  $('retrySentence').onclick=()=>{const record=session[cursor];if(record)showAnswerSentence(record);};
+
+ const builtTargets={presente:'prendo',passato_prossimo:'preso',imperfetto:'prendevo',futuro:'prenderò',condizionale:'prenderei',congiuntivo:'prenda',imperativo:'Prendi',infinito:'prendere',gerundio:'prendendo',participio_passato:'preso'};
+ const grammarForms=[["presente","Presente","Now, regularly, or generally.","Di solito prendo il caffè al bar.","I usually have coffee at the café."],["passato_prossimo","Passato prossimo","A completed past event: avere or essere + past participle.","Ieri ho preso il treno.","Yesterday I took the train."],["imperfetto","Imperfetto","A past habit, description, or action in progress.","Da piccolo prendevo il treno ogni settimana.","As a child, I took the train every week."],["futuro","Futuro semplice","A future action or prediction.","Domani prenderò il treno.","Tomorrow I will take the train."],["condizionale","Condizionale","Would; often used for wishes or polite requests.","Prenderei un caffè, per favore.","I would have a coffee, please."],["congiuntivo","Congiuntivo presente","Often follows doubt, emotion, opinion, or a wish about another subject.","Spero che tu prenda il treno.","I hope that you take the train."],["imperativo","Imperativo","A command or instruction.","Prendi il treno delle otto.","Take the eight o’clock train."],["infinito","Infinito","The dictionary form: the verb’s name.","Voglio prendere il treno.","I want to take the train."],["gerundio","Gerundio","Often used with stare to describe an action in progress.","Sto prendendo il treno.","I am taking the train."],["participio_passato","Participio passato","The past participle, used with avere or essere in compound tenses.","Ho preso il treno.","I took the train."]];
+ let grammarQuiz=null,grammarRevealed=false;
+ function renderGrammar(){
+  const root=$('grammarContent');if(!root)return;root.replaceChildren();
+  const intro=make('div',undefined,root,'panel grammar-panel');
+  make('h2','Verb forms at a glance',intro);
+  make('p','Think of each form as answering a different question: when does it happen, and how does the speaker present it?',intro,'muted');
+  const grid=make('div',undefined,intro,'grammar-grid');
+  for(const f of grammarForms){const card=make('article',undefined,grid,'grammar-card');make('h3',f[1],card);make('p',f[2],card,'muted');make('p',f[3],card,'grammar-it');make('p',f[4],card,'grammar-en');}
+  const practice=make('section',undefined,root,'panel grammar-panel');
+  make('h2','Practice: name the form',practice);
+  make('p','Read the sentence and choose the form used by the highlighted verb. The English translation stays hidden until you check.',practice,'muted');
+  const builtIn=grammarForms.map(f=>({sentence:f[3],english:f[4],form:f[0],word:builtTargets[f[0]],origin:'Parola example'}));
+  const linked=C.project(doc).filter(r=>!r.deleted&&!r.conflict&&r.entry.grammarForm&&grammarForms.some(f=>f[0]===r.entry.grammarForm)).map(r=>({sentence:r.entry.sentence,english:r.entry.sentenceTranslation,form:r.entry.grammarForm,word:r.entry.word,lemma:r.entry.lemma,origin:r.entry.lemma?'Your word · '+r.entry.lemma:'Your saved word'}));
+  const pool=[...builtIn,...linked];
+  const question=grammarQuiz||pool[Math.floor(Math.random()*pool.length)];
+  grammarQuiz=question;
+  const prompt=make('div',undefined,practice,'grammar-question');
+  const qText=question.sentence,at=qText.toLocaleLowerCase('it').indexOf((question.word||'').toLocaleLowerCase('it'));if(at>=0){make('span',qText.slice(0,at),prompt);make('strong',qText.slice(at,at+question.word.length),prompt,'grammar-highlight');make('span',qText.slice(at+question.word.length),prompt);}else make('p',qText,prompt,'grammar-it');
+  const choices=make('div',undefined,practice,'grammar-choices');
+  const feedback=make('p',undefined,practice,'grammar-feedback');feedback.id='grammarFeedback';
+  for(const f of grammarForms){const b=make('button',f[1],choices);b.type='button';b.onclick=()=>{if(grammarRevealed)return;grammarRevealed=true;const ok=f[0]===question.form;feedback.textContent=(ok?'Correct. ':'Not quite. ')+grammarForms.find(x=>x[0]===question.form)[1]+(question.lemma?' · infinitive: '+question.lemma:'');feedback.dataset.correct=String(ok);const reveal=$('grammarTranslation');if(reveal)reveal.hidden=false;choices.querySelectorAll('button').forEach(x=>{x.disabled=true;if(x.textContent===grammarForms.find(y=>y[0]===question.form)[1])x.classList.add('grammar-right');});};}
+  const translation=make('p',question.english||'No English translation saved for this sentence.',practice,'grammar-en');translation.id='grammarTranslation';translation.hidden=true;
+  const next=make('button','Next sentence',practice,'primary');next.type='button';next.onclick=()=>{grammarQuiz=pool[Math.floor(Math.random()*pool.length)];grammarRevealed=false;renderGrammar();};
+  const linker=make('section',undefined,root,'panel grammar-panel');
+  make('h2','Build your infinitive library',linker);
+  make('p','Choose one of your saved entries, connect its exact form to the dictionary infinitive, and label the form used in its sentence. Parola keeps the original word and sentence; entries with the same infinitive appear together and join this quiz.',linker,'muted');
+  const live=C.project(doc).filter(r=>!r.deleted&&!r.conflict);
+  const select=make('select',undefined,linker);select.setAttribute('aria-label','Saved vocabulary entry');
+  make('option','Choose a saved word or phrase…',select).value='';
+  for(const r of live){const o=make('option',r.entry.word+' — '+r.entry.sentence,select);o.value=r.id;}
+  const lemma=make('input',undefined,linker);lemma.type='text';lemma.placeholder='Dictionary infinitive, e.g. mettere';lemma.setAttribute('aria-label','Dictionary infinitive');
+  const formSelect=make('select',undefined,linker);formSelect.setAttribute('aria-label','Verb form in the saved sentence');
+  make('option','Choose the form shown in the sentence…',formSelect).value='';
+  for(const f of grammarForms){const o=make('option',f[1],formSelect);o.value=f[0];}
+  select.onchange=()=>{const r=live.find(x=>x.id===select.value);if(r){lemma.value=r.entry.lemma||'';formSelect.value=r.entry.grammarForm||'';}};
+  const save=make('button','Link saved entry',linker,'primary');save.type='button';save.onclick=async()=>{try{const r=live.find(x=>x.id===select.value);const canonical=lemma.value.trim().toLocaleLowerCase('it');if(!r)throw Error('Choose a saved entry first.');if(!/^[a-zàèéìòù]+(si)?$/iu.test(canonical))throw Error('Enter one Italian infinitive, such as mettere or mettersi.');if(!formSelect.value)throw Error('Choose the form you see in the saved sentence.');await S.edit(r.id,{...r.entry,lemma:canonical,grammarForm:formSelect.value},'put',r.heads);grammarQuiz=null;notify('Linked '+r.entry.word+' to '+canonical+'.');await refresh();renderGrammar();}catch(e){notify(e.message);}};
+  const groups=new Map();for(const r of live){const key=(r.entry.lemma||'').trim().toLocaleLowerCase('it');if(!key)continue;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);}
+  const grouped=make('div',undefined,linker,'infinitive-groups');
+  if(!groups.size)make('p','No infinitives linked yet. Start with forms you have already saved, such as messo → mettere.',grouped,'muted');
+  for(const [key,items] of [...groups].sort((a,b)=>a[0].localeCompare(b[0],'it'))){const article=make('article',undefined,grouped,'infinitive-group');make('h3',key,article);for(const r of items){make('p',r.entry.word+' · '+(grammarForms.find(f=>f[0]===r.entry.grammarForm)?.[1]||'form not labeled'),article);make('p',r.entry.sentence,article,'grammar-it');}}
+ }
  function renderLibrary(){
   const q=$('search').value.toLocaleLowerCase(),all=C.project(doc),rows=all.filter(r=>(!r.deleted||$('showDeleted').checked)&&[r.entry.word,r.entry.translation,r.entry.sentence,r.entry.sentenceTranslation].join(' ').toLocaleLowerCase().includes(q));
   $('entries').replaceChildren();$('librarySummary').textContent=`${rows.length} matching entries${all.some(r=>r.conflict)?' · Conflicts need your choice before practice.':''}`;
@@ -167,7 +211,7 @@
 
  $('addManual').onclick=()=>openEditor(null);$('closeEditor').onclick=()=>$('editor').close();
  $('editForm').onsubmit=async ev=>{ev.preventDefault();try{
-  const value=C.cleanEntry({...editEntry,word:$('editWord').value,translation:$('editTranslation').value,sentence:$('editSentence').value,sentenceTranslation:$('editSentenceTranslation').value,occurrence:Number($('editOccurrence').value)});
+  const value=C.cleanEntry({...editEntry,word:$('editWord').value,translation:$('editTranslation').value,sentence:$('editSentence').value,sentenceTranslation:$('editSentenceTranslation').value,lemma:editEntry.lemma||'',grammarForm:editEntry.grammarForm||'',occurrence:Number($('editOccurrence').value)});
   if(editId)await S.edit(editId,value,'put',editHeads);else {const result=await S.capture(value);notify(result.status);}
   $('editor').close();await refresh();
  }catch(e){$('editError').textContent=e.message;}};
@@ -230,11 +274,11 @@
     $('accountConsent').checked=false;
     window.addEventListener('domshop-parola-change',async e=>{
      const target=S;if(e.detail?.database!==target.database)return;
-     try{const fresh=await target.read();if(target!==S)return;doc=fresh;driveSync.capture();}catch(err){notify('Local save needs attention: '+err.message);}
+     try{const fresh=await target.read();if(target!==S)return;doc=fresh;driveSync.capture();await refresh();}catch(err){notify('Local save needs attention: '+err.message);}
     });
    }
 
-   tab(['today','library','settings'].includes(location.hash.slice(1))?location.hash.slice(1):'today');
+   tab(['today','library','grammar','settings'].includes(location.hash.slice(1))?location.hash.slice(1):'today');
    if(!ext&&$('clientId').value)loadGIS();
   }catch(e){notify('Local storage unavailable: '+e.message+'. Enable site storage and retry; existing data has not been cleared.');}
  }
